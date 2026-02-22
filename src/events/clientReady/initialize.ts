@@ -1,8 +1,8 @@
 import mongoose from 'mongoose'
 import { ActivityType } from 'discord.js'
 import { Event } from '@/types/events'
-import { mongoURL } from '../../config/bot'
-import logger from '../../utils/logger'
+import { mongoURL } from '@/config/env'
+import logger from '@/utils/logger'
 
 export default {
   once: true,

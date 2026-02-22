@@ -1,8 +1,7 @@
 import { Client, Collection, GatewayIntentBits } from 'discord.js'
-import { token } from './config/bot'
+import { token } from '@/config/env'
 
-import loadPrefixCommands from '@/handlers/prefixCommands'
-import loadSlashCommands from '@/handlers/slashCommands'
+import loadCommands from '@/handlers/commands'
 import loadEvents from '@/handlers/events'
 
 import logger from '@/utils/logger'
@@ -17,6 +16,7 @@ const client = new Client({
 
 client.prefixCommands = new Collection()
 client.slashCommands = new Collection()
+client.contextMenuCommands = new Collection()
 
 process.on('unhandledRejection', (error: unknown) => {
   const err = error instanceof Error
@@ -39,8 +39,7 @@ process.on('uncaughtException', (error) => {
 
 logger.info('Starting up...\n')
 
-await loadPrefixCommands(client)
-await loadSlashCommands(client)
+await loadCommands(client)
 await loadEvents(client)
 
 console.log()

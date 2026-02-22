@@ -1,7 +1,7 @@
 import { EmbedBuilder, Message, Client } from 'discord.js'
 import type { Event } from '@/types/events'
-import { hasPermission, type PermissionContext } from '@/services/permissions'
-import { prefix } from '@/config/bot'
+import { hasPermission, checkCooldown, type PermissionContext } from '@/services/permissions'
+import { prefix } from '@/config/env'
 import logger from '@/utils/logger'
 
 const PERMISSION_MESSAGES: Record<string, string | null> = {
@@ -22,22 +22,29 @@ export default {
     const command = client.prefixCommands.get(commandName)
     if (!command) return
 
-    const context: PermissionContext = {
-      member: message.member
-    }
+    const context: PermissionContext = { member: message.member }
 
     const allowed = await hasPermission(context, command.permission)
-
     if (!allowed) {
       const embed = new EmbedBuilder()
-        .setColor(0xED4245)
+        .setColor('Red')
         .setDescription(
-          (command.category ? PERMISSION_MESSAGES[command.category] : null)
-          ?? 'No tienes permisos para usar este comando'
+          PERMISSION_MESSAGES[command.permission]
+          ?? 'No tienes permisos para utilizar este comando'
         )
-
       await message.reply({ embeds: [embed] })
       return
+    }
+
+    if (command.cooldown) {
+      const remaining = checkCooldown(commandName, message.author.id, command.cooldown)
+      if (remaining) {
+        const embed = new EmbedBuilder()
+          .setColor('Yellow')
+          .setDescription(`Debes esperar **${remaining}s** para volver a utilizar este comando`)
+        await message.reply({ embeds: [embed] })
+        return
+      }
     }
 
     try {
@@ -49,7 +56,7 @@ export default {
       })
 
       const embed = new EmbedBuilder()
-        .setColor(0xED4245)
+        .setColor('Red')
         .setDescription('Ocurrió un error al ejecutar este comando')
 
       await message.reply({ embeds: [embed] })

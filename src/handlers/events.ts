@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import { Events, Client } from 'discord.js'
 import logger from '@/utils/logger'
 
@@ -23,31 +23,32 @@ export default async (client: Client): Promise<number> => {
   const folderErrors: string[] = []
   const errors: LoadError[] = []
 
-  for (const type of eventTypes) {
+  await Promise.all(eventTypes.map(async type => {
     const eventKey = (Object.keys(Events) as Array<keyof typeof Events>).find(
       key => key === type.charAt(0).toUpperCase() + type.slice(1)
     )
 
     if (!eventKey) {
       folderErrors.push(type)
-      continue
+      return
     }
 
     const eventName = Events[eventKey]
     const eventDir = path.join(baseDir, type)
-    const files = fs.readdirSync(eventDir).filter(f => f.endsWith('.ts'))
+    const files = fs.readdirSync(eventDir).filter(f => /\.(ts|js)$/.test(f))
     total += files.length
 
-    for (const file of files) {
-      const fileName = `${type}/${file.replace('.ts', '')}`
+    await Promise.all(files.map(async file => {
+      const fileName = `${type}/${file.replace(/\.(ts|js)$/, '')}`
       try {
-        const { default: event } = await import(
-          `../events/${type}/${file}`
-        ) as { default: { once?: boolean, execute: (...args: any[]) => any } }
+        const modulePath = pathToFileURL(path.join(eventDir, file)).href
+        const { default: event } = await import(modulePath) as {
+          default: { once?: boolean; execute: (...args: any[]) => any }
+        }
 
         if (typeof event?.execute !== 'function') {
           errors.push({ file: fileName, reason: 'Invalid export (missing execute)' })
-          continue
+          return
         }
 
         const handler = (...args: any[]) => event.execute(...args, client)
@@ -56,10 +57,7 @@ export default async (client: Client): Promise<number> => {
           once: (event: string, handler: (...args: unknown[]) => void) => void
         }
 
-        event.once
-          ? emitter.once(eventName, handler)
-          : emitter.on(eventName, handler)
-
+        event.once ? emitter.once(eventName, handler) : emitter.on(eventName, handler)
         loaded++
       } catch (error) {
         errors.push({
@@ -67,8 +65,8 @@ export default async (client: Client): Promise<number> => {
           reason: error instanceof Error ? error.message : 'Unknown error'
         })
       }
-    }
-  }
+    }))
+  }))
 
   if (total === 0) {
     logger.warn('No events found')
@@ -87,7 +85,7 @@ export default async (client: Client): Promise<number> => {
   errors.forEach(({ file, reason }) => {
     logger.warn('Failed to load event', {
       eventType: file.split('/')[0],
-      file: `${file}.ts`,
+      file: `${file}${path.extname(file) || '.ts'}`,
       reason
     })
   })

@@ -21,7 +21,6 @@ pnpm-debug.log*
 *.tsbuildinfo
 
 # Editor
-.vscode/
 .idea/
 *.suo
 *.ntvs*

@@ -1,9 +1,14 @@
 import { Collection } from 'discord.js'
-import type { SlashCommand, PrefixCommand } from '@/types/commands'
+import type {
+  PrefixCommandInstance,
+  SlashCommandInstance,
+  ContextMenuCommandInstance
+} from '@/types/commands'
 
 declare module 'discord.js' {
   interface Client {
-    slashCommands: Collection<string, SlashCommand>
-    prefixCommands: Collection<string, PrefixCommand>
+    prefixCommands: Collection<string, PrefixCommandInstance>
+    slashCommands: Collection<string, SlashCommandInstance>
+    contextMenuCommands: Collection<string, ContextMenuCommandInstance>
   }
 }

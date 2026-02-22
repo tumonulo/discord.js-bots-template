@@ -1,4 +1,4 @@
-import { guildId } from '@/config/bot'
+import { guildId } from '@/config/env'
 import type { GuildDocument } from '@/models/Guild'
 import Guild from '@/models/Guild'
 

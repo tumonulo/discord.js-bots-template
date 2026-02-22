@@ -1,6 +1,6 @@
 import { EmbedBuilder } from 'discord.js'
 import type { Event } from '@/types/events'
-import { hasPermission } from '@/services/permissions'
+import { hasPermission, checkCooldown } from '@/services/permissions'
 import logger from '@/utils/logger'
 
 const PERMISSION_MESSAGES: Record<string, string | null> = {
@@ -17,23 +17,32 @@ export default {
     if (!command) return
 
     const allowed = await hasPermission(interaction, command.permission)
-
     if (!allowed) {
       const embed = new EmbedBuilder()
-        .setColor(0xED4245)
+        .setColor('Red')
         .setDescription(
-          (command.category ? PERMISSION_MESSAGES[command.category] : null)
+          PERMISSION_MESSAGES[command.permission]
           ?? 'No tienes permisos para utilizar este comando'
         )
-
       await interaction.reply({ embeds: [embed], ephemeral: true })
       return
+    }
+
+    if (command.cooldown) {
+      const remaining = checkCooldown(interaction.commandName, interaction.user.id, command.cooldown)
+      if (remaining) {
+        const embed = new EmbedBuilder()
+          .setColor('Yellow')
+          .setDescription(`Debes esperar **${remaining}s** para volver a utilizar este comando`)
+        await interaction.reply({ embeds: [embed], ephemeral: true })
+        return
+      }
     }
 
     try {
       await command.execute(interaction, client)
     } catch (error) {
-      logger.error('Command failed', {
+      logger.error('Slash command failed', {
         command: interaction.commandName,
         user: interaction.user.tag,
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -43,11 +52,10 @@ export default {
       })
 
       const embed = new EmbedBuilder()
-        .setColor(0xED4245)
+        .setColor('Red')
         .setDescription('Ocurrió un error a la hora de ejecutar el comando')
 
       const reply = { embeds: [embed], ephemeral: true }
-
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(reply)
       } else {

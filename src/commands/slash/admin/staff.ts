@@ -60,7 +60,7 @@ export default {
       const role = interaction.options.getRole('rol', true)
 
       if (config.staffRoleIds.includes(role.id)) {
-        return replyEmbed(0xED4245, `${role} ya está configurado.`)
+        return replyEmbed('Red', `${role} ya está configurado.`)
       }
 
       config.staffRoleIds.push(role.id)
@@ -73,7 +73,7 @@ export default {
       const role = interaction.options.getRole('rol', true)
 
       if (!config.staffRoleIds.includes(role.id)) {
-        return replyEmbed(0xED4245, `${role} no está configurado.`)
+        return replyEmbed('Red', `${role} no está configurado.`)
       }
 
       config.staffRoleIds = config.staffRoleIds.filter(id => id !== role.id)
@@ -91,7 +91,7 @@ export default {
         .map(id => `<@&${id}>`)
         .join(', ')
 
-      return replyEmbed(0x5865F2, roles, 'Roles del Staff')
+      return replyEmbed('Blue', roles, 'Roles del Staff')
     }
   }
 } satisfies SlashCommand

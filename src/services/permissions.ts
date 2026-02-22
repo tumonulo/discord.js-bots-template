@@ -49,3 +49,20 @@ export async function hasPermission(
 
   return false
 }
+
+const cooldowns = new Map<string, Map<string, number>>()
+
+export function checkCooldown(commandName: string, userId: string, cooldown: number): number | null {
+  if (!cooldowns.has(commandName)) cooldowns.set(commandName, new Map())
+
+  const timestamps = cooldowns.get(commandName)!
+  const now = Date.now()
+  const expiry = timestamps.get(userId)
+
+  if (expiry && now < expiry) return Math.ceil((expiry - now) / 1000)
+
+  timestamps.set(userId, now + cooldown * 1000)
+  setTimeout(() => timestamps.delete(userId), cooldown * 1000)
+
+  return null
+}
