@@ -42,14 +42,35 @@ function time(): string {
 }
 
 function wrap(text: string, max: number): string[] {
-  if (text.length <= max) return [text]
-
   const lines: string[] = []
-  let start = 0
 
-  while (start < text.length) {
-    lines.push(text.slice(start, start + max))
-    start += max
+  for (const rawLine of text.split('\n')) {
+    let line = ''
+
+    for (const word of rawLine.split(' ')) {
+      if (line && line.length + 1 + word.length <= max) {
+        line += ` ${word}`
+        continue
+      }
+
+      if (line) lines.push(line)
+
+      if (word.length <= max) {
+        line = word
+        continue
+      }
+
+      let rest = word
+
+      while (rest.length > max) {
+        lines.push(rest.slice(0, max))
+        rest = rest.slice(max)
+      }
+
+      line = rest
+    }
+
+    lines.push(line)
   }
 
   return lines
@@ -59,10 +80,17 @@ function printKeyValue(key: string, value: unknown, indent: number): void {
   const width = process.stdout.columns ?? 80
   const keyText = TYPE_COLORS.key + key + ':' + COLORS.reset + ' '
   const keyWidth = key.length + 2
-  const max = width - indent - keyWidth
+  const max = Math.max(1, width - indent - keyWidth)
 
   if (typeof value === 'string') {
-    console.log(' '.repeat(indent) + keyText + TYPE_COLORS.string + value + COLORS.reset)
+    const lines = wrap(value, max)
+
+    console.log(' '.repeat(indent) + keyText + TYPE_COLORS.string + lines[0] + COLORS.reset)
+
+    for (let i = 1; i < lines.length; i++) {
+      console.log(' '.repeat(indent + keyWidth) + TYPE_COLORS.string + lines[i] + COLORS.reset)
+    }
+
     return
   }
 
@@ -95,9 +123,7 @@ function printKeyValue(key: string, value: unknown, indent: number): void {
   console.log(' '.repeat(indent) + keyText + TYPE_COLORS.string + lines[0] + COLORS.reset)
 
   for (let i = 1; i < lines.length; i++) {
-    console.log(
-      ' '.repeat(indent + keyWidth) + TYPE_COLORS.string + lines[i] + COLORS.reset
-    )
+    console.log(' '.repeat(indent + keyWidth) + TYPE_COLORS.string + lines[i] + COLORS.reset)
   }
 }
 

@@ -1,71 +1,88 @@
-import { EmbedBuilder } from 'discord.js'
+import { EmbedBuilder, type Client } from 'discord.js'
 import type { Event } from '@/types/events'
+import { resolveHandler } from '@/handlers/interactions'
+import { parseCustomId, type InteractionParams } from '@/types/interactions'
+import { checkCooldown } from '@/services/permissions'
 import logger from '@/utils/logger'
-
-async function loadHandler(path: string, customId: string) {
-  // Try exact match
-  try {
-    const handler = await import(`@/interactions/${path}/${customId}.ts`)
-    return handler.default
-  } catch {
-    // Try dynamic match (prefix before ":")
-    if (customId.includes(':')) {
-      const prefix = customId.split(':')[0]
-      try {
-        const handler = await import(`@/interactions/${path}/${prefix}.ts`)
-        return handler.default
-      } catch {}
-    }
-  }
-  return null
-}
 
 export default {
   async execute(interaction, client) {
+    const component =
+      interaction.isButton() || interaction.isModalSubmit() || interaction.isAnySelectMenu()
+        ? interaction
+        : null
+
+    if (!component) return
+
     try {
-      let handler = null
-      let folder = ''
-      let id = ''
+      const kind = component.isButton()
+        ? 'button'
+        : component.isModalSubmit()
+          ? 'modal'
+          : 'selectMenu'
 
-      if (interaction.isButton()) {
-        folder = 'buttons'
-        id = interaction.customId
-      } else if (interaction.isModalSubmit()) {
-        folder = 'modals'
-        id = interaction.customId
-      } else if (interaction.isAnySelectMenu()) {
-        folder = 'selectMenus'
-        id = interaction.customId
-      }
-
-      if (folder) {
-        handler = await loadHandler(folder, id)
-      }
+      const handler =
+        kind === 'button'
+          ? resolveHandler(client.buttonHandlers, component.customId)
+          : kind === 'modal'
+            ? resolveHandler(client.modalHandlers, component.customId)
+            : resolveHandler(client.selectMenuHandlers, component.customId)
 
       if (!handler) return
 
-      await handler.execute(interaction, client)
+      const { base, params } = parseCustomId(component.customId)
+
+      const remaining = checkCooldown({
+        command: `${kind}:${base}`,
+        userId: component.user.id,
+        guildId: component.guildId,
+        cooldown: handler.cooldown
+      })
+
+      if (remaining) {
+        const embed = new EmbedBuilder()
+          .setColor('Yellow')
+          .setDescription(`Wait **${remaining}s** before using this again`)
+        await component.reply({ embeds: [embed], ephemeral: true })
+        return
+      }
+
+      const execute = handler.execute as (
+        interaction: typeof component,
+        params: InteractionParams,
+        client: Client
+      ) => Promise<void>
+
+      await execute(component, params, client)
     } catch (error) {
       logger.error('Component handler failed', {
-        type: interaction.type,
-        customId: 'customId' in interaction ? interaction.customId : 'unknown',
-        user: interaction.user.tag,
+        type: component.type,
+        customId: component.customId,
+        user: component.user.tag,
         message: error instanceof Error ? error.message : 'Unknown error',
-        at: error instanceof Error
-          ? error.stack?.split('\n')[1]?.match(/([^/]+:\d+:\d+)/)?.[1] ?? 'unknown'
-          : 'unknown'
+        at:
+          error instanceof Error
+            ? (error.stack?.split('\n')[1]?.match(/([^/]+:\d+:\d+)/)?.[1] ?? 'unknown')
+            : 'unknown'
       })
 
       const embed = new EmbedBuilder()
         .setColor('Red')
-        .setDescription('Ocurrió un error al procesar la interacción')
+        .setDescription('An error occurred while processing the interaction')
 
-      const reply = { embeds: [embed], ephemeral: true }
+      const reply = { embeds: [embed] }
 
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(reply).catch(() => {})
-      } else {
-        await interaction.reply(reply).catch(() => {})
+      try {
+        if (component.replied || component.deferred) {
+          await component.followUp(reply)
+        } else {
+          await component.reply(reply)
+        }
+      } catch (replyError) {
+        logger.warn('Failed to send error reply for interaction', {
+          customId: component.customId,
+          reason: replyError instanceof Error ? replyError.message : 'Unknown error'
+        })
       }
     }
   }

@@ -2,9 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder } from 'discord.js'
 import type { SlashCommand } from '@/types/commands'
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName('ping')
-    .setDescription('Ver la latencia del bot'),
+  data: new SlashCommandBuilder().setName('ping').setDescription('Check the bot latency'),
 
   async execute(interaction) {
     const start = Date.now()
@@ -18,7 +16,7 @@ export default {
           .setColor('Blue')
           .setTitle('🏓 Pong!')
           .addFields(
-            { name: 'Latencia', value: `${latency}ms`, inline: true },
+            { name: 'Latency', value: `${latency}ms`, inline: true },
             { name: 'API', value: `${apiLatency}ms`, inline: true }
           )
       ]

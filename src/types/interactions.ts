@@ -1,28 +1,53 @@
+import type { CooldownConfig } from '@/types/commands'
 import type {
   ButtonInteraction,
   ModalSubmitInteraction,
   AnySelectMenuInteraction,
-  ContextMenuCommandInteraction,
-  ContextMenuCommandBuilder,
+  StringSelectMenuInteraction,
+  UserSelectMenuInteraction,
+  RoleSelectMenuInteraction,
+  MentionableSelectMenuInteraction,
+  ChannelSelectMenuInteraction,
   Client
 } from 'discord.js'
 
-export interface ButtonHandler {
-  customId: string
-  execute: (interaction: ButtonInteraction, client: Client) => Promise<void>
+export type InteractionParams = string[]
+
+export interface InteractionHandler<T> {
+  execute: (interaction: T, params: InteractionParams, client: Client) => Promise<void>
+  cooldown?: CooldownConfig
 }
 
-export interface ModalHandler {
-  customId: string
-  execute: (interaction: ModalSubmitInteraction, client: Client) => Promise<void>
+export type ButtonHandler = InteractionHandler<ButtonInteraction>
+export type ModalHandler = InteractionHandler<ModalSubmitInteraction>
+export type SelectMenuHandler = InteractionHandler<AnySelectMenuInteraction>
+export type StringSelectMenuHandler = InteractionHandler<StringSelectMenuInteraction>
+export type UserSelectMenuHandler = InteractionHandler<UserSelectMenuInteraction>
+export type RoleSelectMenuHandler = InteractionHandler<RoleSelectMenuInteraction>
+export type MentionableSelectMenuHandler = InteractionHandler<MentionableSelectMenuInteraction>
+export type ChannelSelectMenuHandler = InteractionHandler<ChannelSelectMenuInteraction>
+
+export type AnySelectMenuHandler =
+  | SelectMenuHandler
+  | StringSelectMenuHandler
+  | UserSelectMenuHandler
+  | RoleSelectMenuHandler
+  | MentionableSelectMenuHandler
+  | ChannelSelectMenuHandler
+
+export type InteractionHandlerKind = 'buttons' | 'modals' | 'selectMenus'
+
+export interface ParsedCustomId {
+  base: string
+  params: string[]
 }
 
-export interface SelectMenuHandler {
-  customId: string
-  execute: (interaction: AnySelectMenuInteraction, client: Client) => Promise<void>
+// Positional customIds: `ticket:123:staff` -> base `ticket`, params `['123', 'staff']`.
+export function parseCustomId(customId: string): ParsedCustomId {
+  const [base, ...params] = customId.split(':')
+  return { base, params }
 }
 
-export interface ContextMenuHandler {
-  data: ContextMenuCommandBuilder
-  execute: (interaction: ContextMenuCommandInteraction, client: Client) => Promise<void>
+export function resolveBaseCustomId(customId: string): string {
+  return parseCustomId(customId).base
 }

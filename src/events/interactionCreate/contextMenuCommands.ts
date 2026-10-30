@@ -4,8 +4,9 @@ import { hasPermission, checkCooldown } from '@/services/permissions'
 import logger from '@/utils/logger'
 
 const PERMISSION_MESSAGES: Record<string, string | null> = {
-  admin: 'Este comando requiere permisos de Administrador para ser utilizado',
-  staff: 'Este comando require tener un rol de staff para ser utilizado',
+  dev: 'This command is restricted to developers',
+  admin: 'This command requires Administrator permissions',
+  staff: 'This command requires a staff role',
   member: null
 }
 
@@ -21,22 +22,25 @@ export default {
       const embed = new EmbedBuilder()
         .setColor('Red')
         .setDescription(
-          PERMISSION_MESSAGES[command.permission]
-          ?? 'No tienes permisos para utilizar este comando'
+          PERMISSION_MESSAGES[command.permission] ??
+            'You do not have permission to use this command'
         )
-      await interaction.reply({ embeds: [embed], ephemeral: true })
+      await interaction.reply({ embeds: [embed] })
       return
     }
 
-    if (command.cooldown) {
-      const remaining = checkCooldown(interaction.commandName, interaction.user.id, command.cooldown)
-      if (remaining) {
-        const embed = new EmbedBuilder()
-          .setColor('Yellow')
-          .setDescription(`Debes esperar **${remaining}s** para volver a utilizar este comando`)
-        await interaction.reply({ embeds: [embed], ephemeral: true })
-        return
-      }
+    const remaining = checkCooldown({
+      command: interaction.commandName,
+      userId: interaction.user.id,
+      guildId: interaction.guildId,
+      cooldown: command.cooldown
+    })
+    if (remaining) {
+      const embed = new EmbedBuilder()
+        .setColor('Yellow')
+        .setDescription(`Wait **${remaining}s** before using this command again`)
+      await interaction.reply({ embeds: [embed] })
+      return
     }
 
     try {
@@ -46,16 +50,17 @@ export default {
         command: interaction.commandName,
         user: interaction.user.tag,
         message: error instanceof Error ? error.message : 'Unknown error',
-        at: error instanceof Error
-          ? error.stack?.split('\n')[1]?.match(/([^/]+:\d+:\d+)/)?.[1] ?? 'unknown'
-          : 'unknown'
+        at:
+          error instanceof Error
+            ? (error.stack?.split('\n')[1]?.match(/([^/]+:\d+:\d+)/)?.[1] ?? 'unknown')
+            : 'unknown'
       })
 
       const embed = new EmbedBuilder()
         .setColor('Red')
-        .setDescription('Ocurrió un error a la hora de ejecutar el comando')
+        .setDescription('An error occurred while executing the command')
 
-      const reply = { embeds: [embed], ephemeral: true }
+      const reply = { embeds: [embed] }
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(reply)
       } else {

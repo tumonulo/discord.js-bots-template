@@ -1,0 +1,16 @@
+{
+  "Discord Event": {
+    "scope": "typescript",
+    "prefix": "event",
+    "body": [
+      "import type { Event } from '@/types/events'",
+      "",
+      "export default {",
+      "  async execute($1) {",
+      "    $0",
+      "  }",
+      "} satisfies Event<'$2'>"
+    ],
+    "description": "Discord event"
+  }
+}

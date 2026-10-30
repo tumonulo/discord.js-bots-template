@@ -1,9 +1,9 @@
 import { Client, Collection, GatewayIntentBits } from 'discord.js'
 import { token } from '@/config/env'
-
 import loadCommands from '@/handlers/commands'
 import loadEvents from '@/handlers/events'
-
+import loadInteractions from '@/handlers/interactions'
+import { registerLifecycleHandlers } from '@/utils/lifecycle'
 import logger from '@/utils/logger'
 
 const client = new Client({
@@ -11,35 +11,31 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
+    // GatewayIntentBits.GuildMembers,
+    // GatewayIntentBits.GuildPresences,
+    // GatewayIntentBits.GuildMessageReactions,
+    // GatewayIntentBits.GuildVoiceStates,
+    // GatewayIntentBits.GuildModeration,
+    // GatewayIntentBits.GuildInvites,
+    // GatewayIntentBits.GuildScheduledEvents,
+    // GatewayIntentBits.DirectMessages,
+    // GatewayIntentBits.DirectMessageReactions
   ]
 })
 
 client.prefixCommands = new Collection()
 client.slashCommands = new Collection()
 client.contextMenuCommands = new Collection()
+client.buttonHandlers = new Collection()
+client.modalHandlers = new Collection()
+client.selectMenuHandlers = new Collection()
 
-process.on('unhandledRejection', (error: unknown) => {
-  const err = error instanceof Error
-    ? error
-    : new Error(String(error))
-
-  logger.error.bold('Unhandled rejection', {
-    message: err.message,
-    at: err.stack?.split('\n')[1]?.match(/([^/]+:\d+:\d+)/)?.[1] || 'unknown'
-  })
-})
-
-process.on('uncaughtException', (error) => {
-  logger.fatal.bold('Uncaught exception', {
-    message: error?.message,
-    at: error?.stack?.split('\n')[1]?.match(/([^/]+:\d+:\d+)/)?.[1] || 'unknown'
-  })
-  process.exit(1)
-})
+registerLifecycleHandlers(client)
 
 logger.info('Starting up...\n')
 
 await loadCommands(client)
+await loadInteractions(client)
 await loadEvents(client)
 
 console.log()

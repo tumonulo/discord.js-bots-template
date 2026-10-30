@@ -3,8 +3,8 @@ import { runInterval } from '@/utils/interval'
 
 export default {
   once: true,
-  
-  async execute(client) {
+
+  async execute(_client) {
     runInterval(
       [
         // () => someTask()

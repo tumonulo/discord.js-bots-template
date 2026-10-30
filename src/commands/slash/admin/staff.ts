@@ -1,97 +1,87 @@
-import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, type ColorResolvable } from 'discord.js'
+import { SlashCommandBuilder, EmbedBuilder, type ColorResolvable } from 'discord.js'
 import type { SlashCommand } from '@/types/commands'
-import Guild from '@/models/Guild'
+import { getGuildConfig, addStaffRole, removeStaffRole } from '@/services/guild'
 
 export default {
   data: new SlashCommandBuilder()
     .setName('staff')
-    .setDescription('Gestionar roles de staff')
-    .addSubcommand(sub =>
-      sub
-        .setName('añadir-rol')
-        .setDescription('Añadir un rol')
-        .addRoleOption(opt =>
-          opt.setName('rol')
-            .setDescription('Rol a añadir')
-            .setRequired(true)
+    .setDescription('Manage staff roles')
+    .addStringOption((opt) =>
+      opt
+        .setName('operation')
+        .setDescription('Operation to perform (defaults to view)')
+        .addChoices(
+          { name: 'View', value: 'view' },
+          { name: 'Add', value: 'add' },
+          { name: 'Remove', value: 'remove' }
         )
     )
-    .addSubcommand(sub =>
-      sub
-        .setName('remover-rol')
-        .setDescription('Remover un rol')
-        .addRoleOption(opt =>
-          opt.setName('rol')
-            .setDescription('Rol a remover')
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(sub =>
-      sub
-        .setName('mostrar')
-        .setDescription('Mostrar roles configurados')
-    ),
+    .addRoleOption((opt) => opt.setName('role').setDescription('Role to add or remove')),
 
   async execute(interaction) {
-    const sub = interaction.options.getSubcommand()
-
     if (!interaction.guild) {
       return interaction.reply({
-        content: 'Este comando solo puede ser usado en servidores.',
-        ephemeral: true
+        content: 'This command can only be used in servers.'
       })
     }
 
-    const config =
-      await Guild.findOne({ guildId: interaction.guild.id }) ||
-      await Guild.create({ guildId: interaction.guild.id })
+    const guildId = interaction.guild.id
+    const operation = interaction.options.getString('operation') ?? 'view'
 
-    const replyEmbed = (color: ColorResolvable, description: string, title: string | null = null) => {
-      const embed = new EmbedBuilder()
-        .setColor(color)
-        .setDescription(description)
+    const replyEmbed = (
+      color: ColorResolvable,
+      description: string,
+      title: string | null = null
+    ) => {
+      const embed = new EmbedBuilder().setColor(color).setDescription(description)
 
       if (title) embed.setTitle(title)
 
       return interaction.reply({ embeds: [embed] })
     }
 
-    if (sub === 'añadir-rol') {
-      const role = interaction.options.getRole('rol', true)
+    if (operation === 'view') {
+      const config = await getGuildConfig(guildId)
+
+      if (config.staffRoleIds.length === 0) {
+        return replyEmbed('Blue', 'No roles configured.', 'Staff')
+      }
+
+      const roles = config.staffRoleIds.map((id) => `- <@&${id}>`).join('\n')
+
+      return replyEmbed('Blue', roles, 'Staff roles')
+    }
+
+    const role = interaction.options.getRole('role', false)
+
+    if (!role) {
+      return replyEmbed('Red', 'You must specify a role for this operation.')
+    }
+
+    if (operation === 'add') {
+      const config = await getGuildConfig(guildId)
 
       if (config.staffRoleIds.includes(role.id)) {
-        return replyEmbed('Red', `${role} ya está configurado.`)
+        return replyEmbed('Red', `${role} role is already configured.`)
       }
 
-      config.staffRoleIds.push(role.id)
-      await config.save()
+      await addStaffRole(role.id, guildId)
 
-      return replyEmbed('Green', `${role} añadido al staff.`)
+      return replyEmbed('Green', `${role} role added to staff roles.`)
     }
 
-    if (sub === 'remover-rol') {
-      const role = interaction.options.getRole('rol', true)
+    if (operation === 'remove') {
+      const config = await getGuildConfig(guildId)
 
       if (!config.staffRoleIds.includes(role.id)) {
-        return replyEmbed('Red', `${role} no está configurado.`)
+        return replyEmbed('Red', `${role} role is not configured.`)
       }
 
-      config.staffRoleIds = config.staffRoleIds.filter(id => id !== role.id)
-      await config.save()
+      await removeStaffRole(role.id, guildId)
 
-      return replyEmbed('Red', `${role} eliminado del staff.`)
+      return replyEmbed('Green', `${role} role removed from staff roles.`)
     }
 
-    if (sub === 'mostrar') {
-      if (config.staffRoleIds.length === 0) {
-        return replyEmbed('Blue', 'No hay roles configurados.', 'Staff')
-      }
-
-      const roles = config.staffRoleIds
-        .map(id => `<@&${id}>`)
-        .join(', ')
-
-      return replyEmbed('Blue', roles, 'Roles del Staff')
-    }
+    return replyEmbed('Red', 'Unknown operation. Use view, add or remove.')
   }
 } satisfies SlashCommand

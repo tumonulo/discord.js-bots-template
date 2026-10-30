@@ -1,0 +1,109 @@
+{
+  "Discord Button Handler": {
+    "scope": "typescript",
+    "prefix": "buttonHandler",
+    "body": [
+      "import type { ButtonHandler } from '@/types/interactions'",
+      "",
+      "export default {",
+      "  async execute(interaction) {",
+      "    $0",
+      "  }",
+      "} satisfies ButtonHandler"
+    ],
+    "description": "Discord button interaction handler"
+  },
+  "Discord Modal Handler": {
+    "scope": "typescript",
+    "prefix": "modalHandler",
+    "body": [
+      "import type { ModalHandler } from '@/types/interactions'",
+      "",
+      "export default {",
+      "  async execute(interaction) {",
+      "    const $1 = interaction.fields.getTextInputValue('$2')",
+      "    $0",
+      "  }",
+      "} satisfies ModalHandler"
+    ],
+    "description": "Discord modal interaction handler"
+  },
+  "Discord String Select Menu Handler": {
+    "scope": "typescript",
+    "prefix": "stringSelectHandler",
+    "body": [
+      "import type { StringSelectMenuHandler } from '@/types/interactions'",
+      "",
+      "export default {",
+      "  async execute(interaction) {",
+      "    const selected = interaction.values[0]",
+      "    $0",
+      "  }",
+      "} satisfies StringSelectMenuHandler"
+    ],
+    "description": "Discord string select menu handler"
+  },
+  "Discord User Select Menu Handler": {
+    "scope": "typescript",
+    "prefix": "userSelectHandler",
+    "body": [
+      "import type { UserSelectMenuHandler } from '@/types/interactions'",
+      "",
+      "export default {",
+      "  async execute(interaction, _params, client) {",
+      "    const userId = interaction.values[0]",
+      "    const user = await client.users.fetch(userId)",
+      "    $0",
+      "  }",
+      "} satisfies UserSelectMenuHandler"
+    ],
+    "description": "Discord user select menu handler"
+  },
+  "Discord Role Select Menu Handler": {
+    "scope": "typescript",
+    "prefix": "roleSelectHandler",
+    "body": [
+      "import type { RoleSelectMenuHandler } from '@/types/interactions'",
+      "",
+      "export default {",
+      "  async execute(interaction) {",
+      "    const roleId = interaction.values[0]",
+      "    const role = interaction.guild?.roles.cache.get(roleId)",
+      "    $0",
+      "  }",
+      "} satisfies RoleSelectMenuHandler"
+    ],
+    "description": "Discord role select menu handler"
+  },
+  "Discord Mentionable Select Menu Handler": {
+    "scope": "typescript",
+    "prefix": "mentionableSelectHandler",
+    "body": [
+      "import type { MentionableSelectMenuHandler } from '@/types/interactions'",
+      "",
+      "export default {",
+      "  async execute(interaction) {",
+      "    const mentionableId = interaction.values[0]",
+      "    $0",
+      "  }",
+      "} satisfies MentionableSelectMenuHandler"
+    ],
+    "description": "Discord mentionable select menu handler"
+  },
+  "Discord Channel Select Menu Handler": {
+    "scope": "typescript",
+    "prefix": "channelSelectHandler",
+    "body": [
+      "import type { ChannelSelectMenuHandler } from '@/types/interactions'",
+      "",
+      "export default {",
+      "  async execute(interaction, _params, client) {",
+      "    const channelId = interaction.values[0]",
+      "    const channel = await client.channels.fetch(channelId)",
+      "    $0",
+      "  }",
+      "} satisfies ChannelSelectMenuHandler"
+    ],
+    "description": "Discord channel select menu handler"
+  }
+}

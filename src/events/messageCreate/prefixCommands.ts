@@ -5,8 +5,9 @@ import { prefix } from '@/config/env'
 import logger from '@/utils/logger'
 
 const PERMISSION_MESSAGES: Record<string, string | null> = {
-  admin: 'Este comando requiere permisos de Administrador para ser utilizado',
-  staff: 'Este comando require tener un rol de staff para ser utilizado',
+  dev: 'This command is restricted to developers',
+  admin: 'This command requires Administrator permissions',
+  staff: 'This command requires a staff role',
   member: null
 }
 
@@ -22,29 +23,35 @@ export default {
     const command = client.prefixCommands.get(commandName)
     if (!command) return
 
-    const context: PermissionContext = { member: message.member }
+    const context: PermissionContext = {
+      member: message.member,
+      guildId: message.guildId
+    }
 
     const allowed = await hasPermission(context, command.permission)
     if (!allowed) {
       const embed = new EmbedBuilder()
         .setColor('Red')
         .setDescription(
-          PERMISSION_MESSAGES[command.permission]
-          ?? 'No tienes permisos para utilizar este comando'
+          PERMISSION_MESSAGES[command.permission] ??
+            'You do not have permission to use this command'
         )
       await message.reply({ embeds: [embed] })
       return
     }
 
-    if (command.cooldown) {
-      const remaining = checkCooldown(commandName, message.author.id, command.cooldown)
-      if (remaining) {
-        const embed = new EmbedBuilder()
-          .setColor('Yellow')
-          .setDescription(`Debes esperar **${remaining}s** para volver a utilizar este comando`)
-        await message.reply({ embeds: [embed] })
-        return
-      }
+    const remaining = checkCooldown({
+      command: command.name,
+      userId: message.author.id,
+      guildId: message.guildId,
+      cooldown: command.cooldown
+    })
+    if (remaining) {
+      const embed = new EmbedBuilder()
+        .setColor('Yellow')
+        .setDescription(`Wait **${remaining}s** before using this command again`)
+      await message.reply({ embeds: [embed] })
+      return
     }
 
     try {
@@ -57,7 +64,7 @@ export default {
 
       const embed = new EmbedBuilder()
         .setColor('Red')
-        .setDescription('Ocurrió un error al ejecutar este comando')
+        .setDescription('An error occurred while executing this command')
 
       await message.reply({ embeds: [embed] })
     }
