@@ -4,15 +4,15 @@ import logger from '@/utils/logger'
 
 let isShuttingDown = false
 
-async function shutdown(client: Client, signal: string, exitCode = 0): Promise<void> {
+async function shutdown(client: Client, exitCode = 0): Promise<void> {
   if (isShuttingDown) return
   isShuttingDown = true
 
-  logger.info(`Received ${signal}, shutting down...`)
+  logger.info('\nShutting down...')
 
   const forceExit = setTimeout(() => {
-    logger.warn('Shutdown timed out, forcing exit')
-    process.exit(1)
+    logger.warn('\nShutdown timed out, forcing exit\n')
+    setTimeout(() => process.exit(1), 50)
   }, 10_000)
   forceExit.unref()
 
@@ -28,19 +28,19 @@ async function shutdown(client: Client, signal: string, exitCode = 0): Promise<v
       await mongoose.disconnect()
     }
 
-    logger.success('Shutdown complete')
-    process.exit(exitCode)
+    clearTimeout(forceExit)
+    process.exitCode = exitCode
   } catch (error) {
     logger.error('Error during shutdown', {
       reason: error instanceof Error ? error.message : String(error)
     })
-    process.exit(1)
+    process.exitCode = 1
   }
 }
 
 export function registerLifecycleHandlers(client: Client): void {
-  process.once('SIGINT', () => void shutdown(client, 'SIGINT'))
-  process.once('SIGTERM', () => void shutdown(client, 'SIGTERM'))
+  process.once('SIGINT', () => void shutdown(client))
+  process.once('SIGTERM', () => void shutdown(client))
 
   process.on('unhandledRejection', (error: unknown) => {
     const err = error instanceof Error ? error : new Error(String(error))
@@ -56,6 +56,6 @@ export function registerLifecycleHandlers(client: Client): void {
       message: error?.message,
       at: error?.stack?.split('\n')[1]?.match(/([^/]+:\d+:\d+)/)?.[1] || 'unknown'
     })
-    void shutdown(client, 'uncaughtException', 1)
+    void shutdown(client, 1)
   })
 }

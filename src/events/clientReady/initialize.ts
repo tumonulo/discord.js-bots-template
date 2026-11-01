@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { ActivityType } from 'discord.js'
 import { Event } from '@/types/events'
 import { mongoURL } from '@/config/env'
+import { deployApplicationCommands } from '@/handlers/commands'
 import logger from '@/utils/logger'
 
 export default {
@@ -10,8 +11,10 @@ export default {
   async execute(client) {
     logger.success(`Logged in as ${client.user.tag}`)
 
+    await deployApplicationCommands(client)
+
     try {
-      await mongoose.connect(mongoURL)
+      await mongoose.connect(mongoURL, { serverSelectionTimeoutMS: 5_000 })
       logger.success('Database connected\n')
     } catch (error) {
       logger.fatal.bold('Database connection failed', {
@@ -22,7 +25,7 @@ export default {
     }
 
     if (process.env.NODE_ENV === 'development') {
-      logger.info('Looking for file changes...\n')
+      logger.success('Watching for file changes...\n')
     }
 
     const activities = ['Template loaded']

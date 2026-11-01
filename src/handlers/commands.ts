@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath, pathToFileURL } from 'url'
+import { pathToFileURL } from 'url'
 import { Client, PermissionFlagsBits } from 'discord.js'
 import type { ApplicationCommand, Collection } from 'discord.js'
 import {
@@ -13,12 +13,10 @@ import { deployGlobal, guildId, devIds } from '@/config/env'
 import { validateCooldown } from '@/services/permissions'
 import logger from '@/utils/logger'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
 const permissionFolders: CommandPermission[] = ['dev', 'admin', 'staff', 'member']
 
 type CommandType = 'prefix' | 'slash' | 'contextMenu'
+
 type CommandJSON =
   | ReturnType<SlashCommandInstance['data']['toJSON']>
   | ReturnType<ContextMenuCommandInstance['data']['toJSON']>
@@ -40,8 +38,8 @@ interface LoadError {
   reason: string
 }
 
-export default async (client: Client): Promise<void> => {
-  const prefix = await loadCommands('prefix')
+export default async (client: Client, rootDir: string): Promise<void> => {
+  const prefix = await loadCommands('prefix', rootDir)
   for (const { fileName, command, permission, aliases } of prefix) {
     const instance: PrefixCommandInstance = {
       ...command,
@@ -55,7 +53,7 @@ export default async (client: Client): Promise<void> => {
     }
   }
 
-  const slash = await loadCommands('slash')
+  const slash = await loadCommands('slash', rootDir)
   for (const { command, permission } of slash) {
     if (permission === 'admin')
       command.data.setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
@@ -65,7 +63,7 @@ export default async (client: Client): Promise<void> => {
     } as SlashCommandInstance)
   }
 
-  const contextMenu = await loadCommands('contextMenu')
+  const contextMenu = await loadCommands('contextMenu', rootDir)
   for (const { command, permission } of contextMenu) {
     if (permission === 'admin')
       command.data.setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
@@ -74,25 +72,11 @@ export default async (client: Client): Promise<void> => {
       permission
     } as ContextMenuCommandInstance)
   }
-
-  client.once('clientReady', async () => {
-    try {
-      await deployApplicationCommands(client)
-      logger.success('Application commands deployed')
-    } catch (error) {
-      logger.error('Command deployment failed', {
-        reason: error instanceof Error ? error.message : 'Unknown error'
-      })
-    }
-  })
 }
 
-async function loadCommands(type: CommandType): Promise<LoadedCommand[]> {
-  const baseDir = path.join(__dirname, `../commands/${type}`)
-  if (!fs.existsSync(baseDir)) {
-    logger.warn(`No ${type} commands found`)
-    return []
-  }
+async function loadCommands(type: CommandType, rootDir: string): Promise<LoadedCommand[]> {
+  const baseDir = path.join(rootDir, 'commands', type)
+  if (!fs.existsSync(baseDir)) return []
 
   const results: LoadedCommand[] = []
   const errors: LoadError[] = []
@@ -135,10 +119,12 @@ async function loadCommands(type: CommandType): Promise<LoadedCommand[]> {
 
   const loaded = unique.length
   const label = total === 1 ? 'command' : 'commands'
-  if (total === 0) logger.info(`No ${type} commands found`)
-  else if (loaded === 0) logger.error(`0/${total} ${type} ${label} loaded`)
-  else if (loaded === total) logger.success(`${loaded}/${total} ${type} ${label} loaded`)
-  else logger.warn(`${loaded}/${total} ${type} ${label} loaded`)
+
+  if (total > 0) {
+    if (loaded === 0) logger.error(`0/${total} ${type} ${label} loaded`)
+    else if (loaded === total) logger.success(`${loaded}/${total} ${type} ${label} loaded`)
+    else logger.warn(`${loaded}/${total} ${type} ${label} loaded`)
+  }
 
   return unique
 }
@@ -249,91 +235,98 @@ function getCommandFiles(dir: string): string[] {
   return fs.readdirSync(dir).filter((f) => /\.(ts|js)$/.test(f))
 }
 
-async function deployApplicationCommands(client: Client): Promise<void> {
-  const commands = [...client.slashCommands.values(), ...client.contextMenuCommands.values()]
-
-  const publicCommands = commands
-    .filter(({ permission }) => permission !== 'dev')
-    .map(({ data }) => data.toJSON())
-  const devCommands = commands.filter(({ permission }) => permission === 'dev')
-
-  if (devCommands.length > 0 && devIds.size === 0) {
-    logger.warn('Dev commands found but DEV_IDS is empty; skipping them')
-  }
-
-  const deployableDevCommands = devIds.size > 0 ? devCommands.map(({ data }) => data.toJSON()) : []
-
-  const application = client.application
-
-  if (deployGlobal) {
+export async function deployApplicationCommands(client: Client): Promise<void> {
+  try {
+    const application = client.application
     if (!application) {
       logger.error('Cannot deploy commands: application is not available')
       return
     }
 
-    const deployed = await syncCommands(application.commands, publicCommands)
-    logger.info(
-      deployed
-        ? 'Application commands deployed globally'
-        : 'Global application commands are up to date'
-    )
+    const commands = [...client.slashCommands.values(), ...client.contextMenuCommands.values()]
+    const publicCommands = commands
+      .filter(({ permission }) => permission !== 'dev')
+      .map(({ data }) => data.toJSON())
+    const devCommands = commands.filter(({ permission }) => permission === 'dev')
 
-    if (!guildId) {
-      if (deployableDevCommands.length > 0) {
-        logger.warn('Dev commands were skipped: GUILD_ID is not set')
+    if (devCommands.length > 0 && devIds.size === 0) {
+      logger.warn('Dev commands found but DEV_IDS is empty; skipping them')
+    }
+
+    const deployableDevCommands =
+      devIds.size > 0 ? devCommands.map(({ data }) => data.toJSON()) : []
+
+    if (deployGlobal) {
+      await deployCommands(application.commands, publicCommands, {
+        deployed: 'Application commands deployed globally',
+        upToDate: 'Global application commands are up to date'
+      })
+
+      if (!guildId) {
+        if (deployableDevCommands.length > 0) {
+          logger.warn('Dev commands were skipped: GUILD_ID is not set')
+        }
+        return
       }
+
+      try {
+        const guild = await client.guilds.fetch(guildId)
+        const changed = await syncCommands(guild.commands, deployableDevCommands)
+
+        if (changed) {
+          if (deployableDevCommands.length > 0) {
+            logger.success('Dev commands deployed to guild')
+          } else {
+            logger.info('Cleared guild commands (global mode)')
+          }
+        } else if (deployableDevCommands.length > 0) {
+          logger.info('Guild dev commands are up to date')
+        }
+      } catch (error) {
+        logger.warn('Could not sync dev commands', {
+          guildId,
+          reason: error instanceof Error ? error.message : String(error)
+        })
+      }
+
       return
     }
 
-    try {
-      const guild = await client.guilds.fetch(guildId)
-      const changed = await syncCommands(guild.commands, deployableDevCommands)
-
-      if (changed) {
-        logger.info(
-          deployableDevCommands.length > 0
-            ? 'Dev commands deployed to guild'
-            : 'Removed guild-specific commands',
-          { guildId }
-        )
-      } else if (deployableDevCommands.length > 0) {
-        logger.info('Guild dev commands are up to date', { guildId })
-      }
-    } catch (error) {
-      logger.warn('Could not sync dev commands', {
-        guildId,
-        reason: error instanceof Error ? error.message : String(error)
-      })
+    if (!guildId) {
+      logger.error('GUILD_ID is required when DEPLOY_GLOBAL is false')
+      return
     }
 
-    return
-  }
+    const guild = await client.guilds.fetch(guildId)
+    await deployCommands(guild.commands, [...publicCommands, ...deployableDevCommands], {
+      deployed: 'Application commands deployed to guild',
+      upToDate: 'Guild application commands are up to date'
+    })
 
-  if (!guildId) {
-    logger.error('GUILD_ID is required when DEPLOY_GLOBAL is false')
-    return
-  }
-
-  const guild = await client.guilds.fetch(guildId)
-  const deployed = await syncCommands(guild.commands, [...publicCommands, ...deployableDevCommands])
-  logger.info(
-    deployed
-      ? 'Application commands deployed to guild'
-      : 'Guild application commands are up to date',
-    { guildId }
-  )
-
-  if (application) {
     try {
       if (await syncCommands(application.commands, [])) {
-        logger.info('Removed global application commands')
+        logger.info('Cleared global commands (guild mode)')
       }
     } catch (error) {
       logger.warn('Could not remove global application commands', {
         reason: error instanceof Error ? error.message : String(error)
       })
     }
+  } catch (error) {
+    logger.error('Command sync failed', {
+      reason: error instanceof Error ? error.message : 'Unknown error'
+    })
   }
+}
+
+async function deployCommands(
+  manager: CommandManager,
+  commands: CommandJSON[],
+  messages: { deployed: string; upToDate: string }
+): Promise<void> {
+  const changed = await syncCommands(manager, commands)
+  if (changed) logger.success(messages.deployed)
+  else logger.info(messages.upToDate)
 }
 
 async function syncCommands(manager: CommandManager, commands: CommandJSON[]): Promise<boolean> {

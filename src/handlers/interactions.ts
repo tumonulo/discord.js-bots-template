@@ -1,14 +1,11 @@
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath, pathToFileURL } from 'url'
+import { pathToFileURL } from 'url'
 import type { Client } from 'discord.js'
 import type { InteractionHandlerKind } from '@/types/interactions'
 import { parseCustomId } from '@/types/interactions'
 import { validateCooldown } from '@/services/permissions'
 import logger from '@/utils/logger'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
 const HANDLER_FOLDERS: InteractionHandlerKind[] = ['buttons', 'modals', 'selectMenus']
 
@@ -17,9 +14,9 @@ interface LoadedHandler {
   handler: any
 }
 
-export default async function loadInteractions(client: Client): Promise<void> {
+export default async function loadInteractions(client: Client, rootDir: string): Promise<void> {
   for (const folder of HANDLER_FOLDERS) {
-    const loaded = await loadFolder(folder)
+    const loaded = await loadFolder(folder, rootDir)
 
     for (const { customId, handler } of loaded) {
       if (folder === 'buttons') client.buttonHandlers.set(customId, handler)
@@ -29,12 +26,12 @@ export default async function loadInteractions(client: Client): Promise<void> {
   }
 }
 
-async function loadFolder(folder: InteractionHandlerKind): Promise<LoadedHandler[]> {
-  const dir = path.join(__dirname, `../interactions/${folder}`)
-  if (!fs.existsSync(dir)) {
-    logger.info(`No ${folder} handlers found`)
-    return []
-  }
+async function loadFolder(
+  folder: InteractionHandlerKind,
+  rootDir: string
+): Promise<LoadedHandler[]> {
+  const dir = path.join(rootDir, 'interactions', folder)
+  if (!fs.existsSync(dir)) return []
 
   const files = fs.readdirSync(dir).filter((f) => /\.(ts|js)$/.test(f))
   const results: LoadedHandler[] = []
@@ -73,11 +70,13 @@ async function loadFolder(folder: InteractionHandlerKind): Promise<LoadedHandler
   )
 
   const label = files.length === 1 ? 'handler' : 'handlers'
-  if (files.length === 0) logger.info(`No ${folder} handlers found`)
-  else if (loaded === files.length)
-    logger.success(`${loaded}/${files.length} ${folder} ${label} loaded`)
-  else if (loaded === 0) logger.error(`0/${files.length} ${folder} ${label} loaded`)
-  else logger.warn(`${loaded}/${files.length} ${folder} ${label} loaded`)
+
+  if (files.length > 0) {
+    if (loaded === files.length)
+      logger.success(`${loaded}/${files.length} ${folder} ${label} loaded`)
+    else if (loaded === 0) logger.error(`0/${files.length} ${folder} ${label} loaded`)
+    else logger.warn(`${loaded}/${files.length} ${folder} ${label} loaded`)
+  }
 
   return results
 }

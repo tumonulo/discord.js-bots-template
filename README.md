@@ -80,7 +80,7 @@ Fill in the variables described in [Configuration](#configuration). Enable **Mes
 pnpm run dev
 ```
 
-The bot starts in watch mode. On startup it loads commands, interactions and events, connects to MongoDB, and syncs changed commands with Discord.
+The bot starts in watch mode. On startup it loads commands, events and interactions, syncs changed commands with Discord, then connects to MongoDB.
 
 ## Configuration
 
@@ -97,27 +97,15 @@ The bot starts in watch mode. On startup it loads commands, interactions and eve
 - With `DEPLOY_GLOBAL=true`, dev commands go to `GUILD_ID`. If it is missing, they are skipped with a warning.
 - Deployment runs on startup, updates only changed commands, and clears the other scope when switching modes.
 
-### Custom variables
+### Startup banner
 
-Add the variable to `.env`, `.env.example` and the schema in `src/config/env.ts`, then export it:
-
-```ts
-// src/config/env.ts
-const envSchema = z.object({
-  // ...
-  API_KEY: z.string().min(1)
-})
-
-// after parsing
-export const { API_KEY: apiKey } = parsed.data
-```
+The title and color are set in `src/index.ts`:
 
 ```ts
-// src/services/example.ts
-import { apiKey } from '@/config/env'
+logBanner('Discord.js Bots Template', 'discord')
 ```
 
-The `.env` key stays uppercase; the exported variable can use camelCase.
+The first argument is the title and the second is the color. Available colors live in `COLORS` in `src/utils/logger.ts`; add a custom truecolor entry there if you need another tone.
 
 ## Project structure
 
@@ -126,9 +114,9 @@ src/
 ├── commands/        # Command routes by type and permission
 ├── events/          # Discord client events
 ├── interactions/    # Buttons, modals and select menus
-├── handlers/        # Loaders, validation and deployment
+├── handlers/        # Loaders and validation
 ├── models/          # Mongoose models
-├── services/        # Guild config, permissions and cooldowns
+├── services/        # Guild config, permissions, cooldowns and deployment
 ├── config/          # Environment validation
 ├── types/           # Shared contracts
 └── utils/           # Logger, interval and lifecycle helpers
@@ -136,7 +124,7 @@ src/
 
 ## Commands
 
-Commands live in `src/commands/<type>/<permission>/<name>.ts`. The file name is the command name.
+Commands live in `src/commands/<type>/<permission>/<name>.ts`; the file name is the command name.
 
 | Type          | Usage                         |
 | ------------- | ----------------------------- |
@@ -151,80 +139,17 @@ Commands live in `src/commands/<type>/<permission>/<name>.ts`. The file name is 
 | `staff/`   | Administrator or a role saved with `/staff` |
 | `member/`  | Everyone                                    |
 
-Duplicate names or aliases are skipped with a warning; command names win over aliases.
-
-```ts
-// src/commands/slash/member/ping.ts
-import { SlashCommandBuilder } from 'discord.js'
-import type { SlashCommand } from '@/types/commands'
-
-export default {
-  data: new SlashCommandBuilder().setName('ping').setDescription('Check the bot latency'),
-  async execute(interaction) {
-    await interaction.reply('Pong!')
-  }
-} satisfies SlashCommand
-```
-
 Full reference: [`src/commands/commands.md`](src/commands/commands.md).
 
 ## Events
 
-Events live in `src/events/<ClientEvent>/`, where the folder matches a `ClientEvents` key. The client is passed as the last argument.
-
-```ts
-// src/events/guildCreate/join.ts
-import type { Event } from '@/types/events'
-import logger from '@/utils/logger'
-
-export default {
-  async execute(guild, client) {
-    logger.info(`Joined ${guild.name}`, {
-      guildId: guild.id,
-      bot: client.user?.tag
-    })
-  }
-} satisfies Event<'guildCreate'>
-```
-
-Recurring tasks live in `src/events/clientReady/intervals.ts`. Each task runs independently and failures are logged:
-
-```ts
-// src/events/clientReady/intervals.ts
-import type { Event } from '@/types/events'
-import { runInterval } from '@/utils/interval'
-
-const syncCache = async () => {
-  // ...
-}
-
-export default {
-  once: true,
-  async execute() {
-    runInterval([syncCache], 1000 * 60 * 15)
-  }
-} satisfies Event<'clientReady'>
-```
+Events live in `src/events/<ClientEvent>/`, where the folder matches a `ClientEvents` key. The client is passed as the last argument. Recurring tasks live in `src/events/clientReady/intervals.ts` and run independently.
 
 Full reference: [`src/events/events.md`](src/events/events.md).
 
 ## Interactions
 
-Handlers live in `src/interactions/<buttons|modals|selectMenus>/`. The file name is the base `customId`; `ticket.ts` handles `ticket`, `ticket:123` and `ticket:123:staff`.
-
-Handlers receive `(interaction, params, client)`, where `params` is a positional array parsed from the `customId`. They accept the same optional `cooldown` as commands.
-
-```ts
-// src/interactions/buttons/ticket.ts (customId: ticket:close)
-import type { ButtonHandler } from '@/types/interactions'
-
-export default {
-  async execute(interaction, params) {
-    const [action] = params
-    await interaction.reply(`Ticket action: ${action}`)
-  }
-} satisfies ButtonHandler
-```
+Handlers live in `src/interactions/<buttons|modals|selectMenus>/`. The file name is the base `customId`; `ticket.ts` handles `ticket`, `ticket:123` and `ticket:123:staff`. Handlers receive `(interaction, params, client)`, where `params` is a positional array parsed from the `customId`, and accept the same optional `cooldown` as commands.
 
 Full reference: [`src/interactions/interactions.md`](src/interactions/interactions.md).
 
@@ -237,8 +162,8 @@ Full reference: [`src/interactions/interactions.md`](src/interactions/interactio
 | `pnpm run start`        | Start the compiled bot      |
 | `pnpm run typecheck`    | Run the TypeScript compiler |
 | `pnpm run lint`         | Run ESLint                  |
-| `pnpm run format`       | Format `src/` with Prettier |
-| `pnpm run format:check` | Check `src/` formatting     |
+| `pnpm run format`       | Format code with Prettier   |
+| `pnpm run format:check` | Check code formatting       |
 
 For production:
 
